@@ -1,0 +1,204 @@
+---
+title: "main_network_script"
+author: "LISA"
+date: "12/3/2021"
+output: html_document
+---
+##########################
+# OVERVIEW OF PROCEDURES 
+##########################
+First, we will filter each author sheet to keep only papers that have a valid collaboration
+Next, we will combine these sheets together and remove duplicates to have a final, single, cleaned dataset. 
+
+##I: filter each author sheet: 
+1, filter sloan list to get the other collaborators
+2, filter articles to only keep collaboration articles
+3, manually check collaboration articles are relevant 
+4, clean author names to be consistent in the kept articles
+
+##II: combine author sheets and do some final filtering: 
+1, combine the articles left to one dataframe (main R script that calls the source)
+2, remove duplicates in dataframe (available)
+3, divide into two dataframe based on years (available)
+4, create plots
+
+#########################################
+# 0: SET UP - INSTALL PACKAGES NEEDED 
+#########################################
+#install relevant packages: 
+```{r}
+#install.packages("bibliometrix")
+#install.packages("readxl")
+#install.packages("gdata")
+```
+
+#read packages:
+```{r}
+library(scholar)
+library(networkDynamic)
+library(ndtv)
+require(igraph)
+library(statnet)
+library(intergraph)
+library(visNetwork)
+library(dplyr)
+library(readxl)
+library(tidyverse)
+library(stringr)
+library(rvest)
+library(dplyr)
+library(xtable)
+library(edgebundleR)
+
+source('sourceFunctions_filterRename.R')
+
+```
+
+#########################################
+# 1: for loop that apply the functions from source-code to each data sheet
+#########################################
+We will do this procedure for each author/author sheet. The idea is to only include papers that have a collaboration with our authors of interest and clean the naming conventions
+#########################################
+#read all of these sheets into R and apply functions to them
+```{r}
+#read sloan author list
+sloan<-read.csv("Sloan_CIE_Author_List.xlsx - LastName FirstInitial.csv",header=FALSE)
+
+#for each author, apply cleaning/filtering functions
+#to make processing easier, arrange the cleaned data sheets in accordance with the indexing in the sloan author list
+master_data<-NULL
+for (i in 1:37){ 
+  primary_name<-sloan[i,1]
+  sloan_filtered<-filter_SL(lastname = primary_name,author_list = sloan)
+  current <- read_excel("Cleaned Data by Author.xlsx", sheet=i)
+  author_data_extract = filter_AL(author_data = current, sloan_list = sloan_filtered)
+  filtered_name_df = filter_name(author_data_extract,primary_name)
+  master_data<-rbind(master_data,filtered_name_df)
+}
+
+```
+
+#2: remove duplicates
+```{r}
+#apply the unique function to the article titles
+
+#DO NOT apply it to the master data directly. The author names can be in different order for the same article, so applying it directly doesn't remove any duplicates
+
+master_data_unique<-master_data%>%filter(!duplicated(master_data$Title))
+
+write.csv(master_data, "master_cleaned.csv")
+write.csv(master_data_unique, "master_cleaned_unique.csv")
+```
+
+#3: split into 2 separate datasets, based on the year ranges provided: 
+  #pre: year range 1: 2008-2014
+  #post: year range 2: 2015-2021
+```{r}
+  preProg.data = master_data_unique[master_data_unique$`Publication Year` < 2015, ]
+  postProg.data = master_data_unique[master_data_unique$`Publication Year` >= 2015, ] #post includes the year 2015 
+```
+
+#4: visualize network:
+```{r}
+#################################################################################
+#sample plot for overall collaborations
+##referenced from https://rpubs.com/brandonkopp/creating-a-network-plot-in-R
+
+authors<-master_data_unique
+
+#change n according to the article with the largest number of coauthors
+#my guess is 15, seems to be an overestimate but it's fine
+sp <- str_split_fixed(authors$Authors,"\\;",n=15)
+#replace empty cells with NA
+sp[nchar(sp)==0] <- NA
+
+#Trim sp matrix down to width of maximum number of authors
+x <- matrix(ncol = 1,nrow = 15)
+for(i in 1:15){
+  x[i,1] <- sum(!is.na(sp[ ,i]))
+}
+minrow <- which.min(x[,1]) -1
+sp <- sp[,1:minrow]
+
+#This function loops through each row of sp and creates all of the unique combinations of x authors.
+#Creates x!/2 rows in the new dataset for each row, where x equals the number of authors.
+combo <- function(df) {
+  x <- data.frame(matrix(ncol = 3, nrow = 1))
+  names(x) <- c("Var1","Var2","V3")
+  
+  for(i in 1:nrow(df)){
+    if(sum(!is.na(df[i, ])) > 1){
+      temp <- expand.grid(df[i, ], df[i,],stringsAsFactors = FALSE)
+      temp <- temp[complete.cases(temp), ]
+      temp <- temp[temp$Var1 != temp$Var2, ]
+      for (j in 1:nrow(temp))
+      {
+        temp[j, ] = sort(temp[j, ])
+      }
+      temp <- unique(temp[duplicated(temp),])
+      temp[,3] <- i
+      x <- rbind(x,temp)
+    }
+  }
+  x <- x[2:nrow(x), ]
+  names(x) <- c("a1","a2","id")
+  return(x)
+}
+pairs <- combo(sp)
+nodes <- t(cbind(t(pairs[,1]), t(pairs[,2])))
+nodes <- data.frame(nodes) %>% group_by(nodes) %>%
+  summarise(count=n())
+
+# Create the graph object
+g <- graph.data.frame(pairs[,1:2], directed=F, vertices=nodes)
+
+fig<-edgebundle( g )
+fig
+
+visSave(fig, "coauthor_network.html", selfcontained = T)
+```
+
+#others: old codes
+```{r}
+coauthors = sapply(as.character(master_data_unique$Authors), strsplit, ";")
+coauthors = unlist(coauthors)
+
+coauthors = lapply(coauthors, trimws)
+coauthors.unique = unique(unlist(coauthors))[order(unique(unlist(coauthors)))]
+
+bipartite.edges = lapply(coauthors, function(x) {coauthors.unique %in% x})
+bipartite.edges = do.call("cbind", bipartite.edges) # dimension is number of authors x number of papers
+rownames(bipartite.edges) = coauthors.unique
+
+mat = bipartite.edges %*% t(bipartite.edges) #bipartite to unimode
+mat = mat[order(rownames(mat)), order(rownames(mat))]
+
+statnet = as.network(mat, directed = FALSE, names.eval = "edge.lwd", ignore.eval = FALSE)
+statnet # view network summary
+
+author.codegree = mat["Ault",]
+statnet%v%"size" = log(author.codegree) + .5 
+plot.network(statnet, edge.col = "gray", edge.lwd = statnet%e%"edge.lwd",
+             label = "vertex.names", label.cex = .5, label.pad = 0, label.pos = 1, vertex.cex = "size")
+
+nodes <- data.frame(id = 1:length(statnet%v%"vertex.names"),
+                            label = statnet%v%"vertex.names",
+                            title = statnet%v%"vertex.names",
+                            size = 5*(2+statnet%v%"size"))
+
+edges <- data.frame(from=data.frame(as.edgelist(statnet))$X1, 
+                            to=data.frame(as.edgelist(statnet))$X2)
+
+interactive = visNetwork(nodes, edges, main = "Co-Author Network", width = 800, height = 800) %>% 
+  visIgraphLayout(layout = "layout_nicely", type = "full")
+
+interactive = interactive  %>%
+  visNodes(color = list(background = "white", highlight = "red", hover = list(border = "red"))) %>%
+  visEdges(selectionWidth = 10, color = list(highlight = "green")) 
+
+interactive = interactive  %>%  
+  visOptions(nodesIdSelection = list(enabled  = TRUE, useLabels = TRUE, main = "Select by Author"))
+```
+
+
+
