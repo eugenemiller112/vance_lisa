@@ -48,8 +48,9 @@ filter_AL<-function(author_data, sloan_list){
         data_R=rbind(data_R,author_data[i,])
         break
       },
-      error = function(loop){
+      error = function(e){
         print(error)
+        print("Hello")
         print(author_data[i,"Authors"])
         print(sloan_list[j,])
         print(s)
@@ -77,10 +78,21 @@ filter_name<-function(author_data,primary_author_name){
     rv1<-primary_author_name
     for (j in 1:nrow(sloan_filtered)){
       s = str_detect(string=author_data[i,"Authors"],pattern=sloan_filtered[j,],)
-      if (s==TRUE){
-        
-        rv1<-c(rv1,sloan_filtered[j,])
+      if (length(s)==0){
+        next
       }
+      if (is.na(s)){
+        next
+      }
+      tryCatch(
+        if (s==TRUE){
+          rv1<-c(rv1,sloan_filtered[j,])
+        },
+        error = function(e){
+          print(s)
+        }
+      )
+      
     }
     comma_vec <- paste(rv1, collapse = ";")
     author_data[i,"Authors"]<-comma_vec[1]
