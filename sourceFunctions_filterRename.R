@@ -79,9 +79,15 @@ filter_name<-function(author_data,primary_author_name){
     for (j in 1:nrow(sloan_filtered)){
       s = str_detect(string=author_data[i,"Authors"],pattern=sloan_filtered[j,],)
       if (length(s)==0){
+        print("Length error")
+        print(i)
+        print(j)
         next
       }
       if (is.na(s)){
+        print("NA error")
+        print(i)
+        print(j)
         next
       }
       tryCatch(
@@ -89,6 +95,7 @@ filter_name<-function(author_data,primary_author_name){
           rv1<-c(rv1,sloan_filtered[j,])
         },
         error = function(e){
+          
           print(s)
         }
       )

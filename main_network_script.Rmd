@@ -69,6 +69,8 @@ sloan<-read.csv("Sloan_CIE_Author_List.xlsx - LastName FirstInitial.csv",header=
 master_data<-NULL
 for (i in 1:37){ 
   primary_name<-sloan[i,1]
+  print(primary_name)
+  print(i)
   sloan_filtered<-filter_SL(lastname = primary_name,author_list = sloan)
   current <- read_excel("Cleaned Data by Author.xlsx", sheet=i)
   author_data_extract = filter_AL(author_data = current, sloan_list = sloan_filtered)
