@@ -69,13 +69,22 @@ sloan<-read.csv("Sloan_CIE_Author_List.xlsx - LastName FirstInitial.csv",header=
 master_data<-NULL
 for (i in 1:37){ 
   primary_name<-sloan[i,1]
-  print(primary_name)
-  print(i)
   sloan_filtered<-filter_SL(lastname = primary_name,author_list = sloan)
   current <- read_excel("Cleaned Data by Author.xlsx", sheet=i)
+  #view(current)
   author_data_extract = filter_AL(author_data = current, sloan_list = sloan_filtered)
-  filtered_name_df = filter_name(author_data_extract,primary_name)
-  master_data<-rbind(master_data,filtered_name_df)
+  #view(author_data_extract)
+  #print(nrow(author_data_extract))
+  #print(dim(author_data_extract)[1])
+  if (nrow(author_data_extract) != 0){
+    filtered_name_df = filter_name(author_data_extract,primary_name)
+    master_data<-rbind(master_data,filtered_name_df)
+  }
+  else {
+    print(primary_name)
+    print("No collaborations")
+  }
+  
 }
 
 ```
