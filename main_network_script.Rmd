@@ -142,6 +142,7 @@ combo <- function(df) {
       temp <- expand.grid(df[i, ], df[i,],stringsAsFactors = FALSE)
       temp <- temp[complete.cases(temp), ]
       temp <- temp[temp$Var1 != temp$Var2, ]
+      temp<-as.data.frame(t(apply(temp, 1, sort)))
       for (j in 1:nrow(temp))
       {
         temp[j, ] = sort(temp[j, ])
